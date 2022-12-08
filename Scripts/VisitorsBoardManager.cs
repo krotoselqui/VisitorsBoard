@@ -291,11 +291,11 @@ public class VisitorsBoardManager : UdonSharpBehaviour
             if (name_text[i] == null) continue;
 
             int nmIndex_LoopStart = cur_obj_index * name_per_object;
-            int nmIndex_LoopEnd = nmIndex < (cur_obj_index + 1) * name_per_object;
+            int nmIndex_LoopEnd =  (cur_obj_index + 1) * name_per_object;
             if (i == name_text.Length - 1) nmIndex_LoopEnd += lastline_overflow;
 
             string st_this_row = "";
-            for (int nmIndex = nmIndex_LoopStart; nmIndex_LoopEnd; nmIndex++)
+            for (int nmIndex = nmIndex_LoopStart; nmIndex < nmIndex_LoopEnd; nmIndex++)
             {
                 if (nmIndex >= visitor_names.Length) continue;
                 if (string.IsNullOrEmpty(visitor_names[nmIndex])) continue;

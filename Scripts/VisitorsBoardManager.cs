@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Globalization;
 using UnityEngine;
 using UnityEngine.UI;
@@ -8,7 +8,7 @@ using VRC.SDKBase;
 [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
 public class VisitorsBoardManager : UdonSharpBehaviour
 {
-//INSPECTOR
+    //INSPECTOR
     [Header("訪問者名カラーコード(在室 / #省略可)")]
     [SerializeField] private string cl_inworld_code = "#FFFFFF";
 
@@ -20,14 +20,17 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     // [SerializeField]private Color cl_absent;
     //ColorUtility.ToHtmlStringRGB(cl_inworld);
     //ColorUtility.ToHtmlStringRGB(cl_absent);
-    
+
     [Header("入退室時刻を表示への切り替えを有効にする")]
-    [Header("   ...在室表示 → 全員表示 → 在室表示... の切り替えがデフォルトですが")]
-    [Header("   ...在室表示 → 全員表示 → 入退室時間表示 → 在室表示... の順切り替えになります")]
+    //[Header("   ...在室表示 → 全員表示 → 在室表示... の切り替えがデフォルトですが")]
+    //[Header("   ...在室表示 → 全員表示 → 入退室時間表示 → 在室表示... の順切り替えになります")]
     [SerializeField] private bool enableEntryExitTimeView = false;
 
     [Header("インスタンス経過時間を表示しない")]
     [SerializeField] private bool dontShowElapsedTime = false;
+
+    [Header("最新の入室時間を入室時間として使う")]
+    [SerializeField] private bool useNewestJoinTime = true;
 
     [Header("１列に入る人数")]
     [SerializeField, Range(1, 100)] private int name_per_object = 20;
@@ -43,50 +46,60 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
     [Header("Date Format - Header")]
     [SerializeField] private string format_date = "yyyy-MM-dd  HH:mm:ss";
-    
+
     [Header("Time Format - Member")]
     [SerializeField] private string format_time = "HH:mm";
 
-//SYNCED 
+    [Header("World Capacity")]
+    [SerializeField] private int world_capacity = 64;
+
+    //SYNCED 
     [UdonSynced] private long time_created = 0;
     [UdonSynced] private string[] visitor_names = null;
     [UdonSynced] private string[] st_firstVisitTime = null;
     [UdonSynced] private string[] st_exitTime = null;
 
-//INTERNAL
+    //INTERNAL
     private int current_viewstat = 0;
 
     private int small_fontsize_day = 40;
     private int small_fontsize_membercount = 30;
+    private int small_fontsize_item = 10;
 
     private int namecount_MAX = 1;
-    private int playersId_MAX = 10000; 
+    private int playersId_MAX = 10000;
 
     private int cur_sec = 0;
     private int prev_sec = 0;
+    VRCPlayerApi[] players = null;
 
-//CONSTANTS
-    private const int STAT_INWORLD_VIEW = 90;
-    private const int STAT_ALL_VIEW = 91;
-    private const int STAT_SHOW_TIME = 92;
+    private int late_update_counter = 2;
+
+    //CONSTANTS
+    private const int STAT_INWORLD_VIEW = 0;
+    private const int STAT_ALL_VIEW = 1;
+    private const int STAT_SHOW_TIME = 2;
     private const int STAT_RESERVED_01 = 93;
     private const int STAT_RESERVED_02 = 94;
 
     private const string SYNC_WAIT_MESSAGE = "Waiting for sync...";
 
-//UNITY EVENTS
+    //UNITY EVENTS
     private void Start()
     {
-        namecount_MAX = (name_text.Length * name_per_object > 0 ) ? name_text.Length * name_per_object + lastline_overflow : 1;
+        VRCPlayerApi[] players = new VRCPlayerApi[world_capacity * 2];
+        namecount_MAX = (name_text.Length * name_per_object > 0) ? name_text.Length * name_per_object + lastline_overflow : 1;
 
         if (elapsed_text != null) small_fontsize_day = (int)(elapsed_text.fontSize * 0.4f) + 1;
         if (visitorsnumber_text != null) small_fontsize_membercount = (int)(visitorsnumber_text.fontSize * 0.6f) + 1;
+        if (name_text[0] != null) small_fontsize_item = (int)(name_text[0].fontSize * 0.5f) + 1;
+
         cl_inworld_code = cl_inworld_code.StartsWith("#") ? cl_inworld_code : "#" + cl_inworld_code;
         cl_absent_code = cl_absent_code.StartsWith("#") ? cl_absent_code : "#" + cl_absent_code;
 
-        for(int i=0;i<name_text.Length;i++)
+        for (int i = 0; i < name_text.Length; i++)
         {
-            if (name_text == null) continue;
+            if (name_text[i] == null) continue;
             if (name_per_object > 1)
             {
                 name_text[i].alignment = TextAnchor.UpperCenter;
@@ -95,7 +108,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
             }
         }
 
-        time_text.text = SYNC_WAIT_MESSAGE
+        time_text.text = SYNC_WAIT_MESSAGE;
 
         if (Networking.IsOwner(this.gameObject))
         {
@@ -105,14 +118,19 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
     private void Update()
     {
-        if (visitor_names != null)
+        if (visitor_names != null && st_firstVisitTime != null && st_exitTime != null)
         {
             cur_sec = DateTime.Now.Second;
             if (prev_sec != cur_sec)
             {
                 prev_sec = cur_sec;
                 DisplayElapsedTimeOfInstance();
-                if (cur_sec % 30 == 0) DisplayVisitorBoard();
+
+                if (late_update_counter > 0)
+                {
+                    if (late_update_counter == 1) DisplayVisitorBoard();
+                    late_update_counter--;
+                }
             }
         }
         else
@@ -124,7 +142,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
     public override void OnDeserialization()
     {
-        if (visitor_names != null)
+        if (visitor_names != null && st_firstVisitTime != null && st_exitTime != null)
         {
             DisplayVisitorBoard();
         }
@@ -137,11 +155,12 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
     public override void OnPlayerJoined(VRCPlayerApi player)
     {
-        if (visitor_names != null)
+        late_update_counter = 3;
+        if (visitor_names != null && st_firstVisitTime != null && st_exitTime != null)
         {
             if (Networking.IsOwner(this.gameObject))
             {
-                AddName(player.displayName);
+                AddNameAndJoinStamp(player.displayName);
                 DisplayVisitorBoard();
             }
         }
@@ -154,7 +173,8 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
     public override void OnPlayerLeft(VRCPlayerApi player)
     {
-        if (visitor_names != null)
+        late_update_counter = 3;
+        if (visitor_names != null && st_firstVisitTime != null && st_exitTime != null)
         {
             if (Networking.IsOwner(this.gameObject))
             {
@@ -172,39 +192,46 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     public override void Interact()
     {
         current_viewstat = enableEntryExitTimeView ? (current_viewstat + 1) % 3 : (current_viewstat + 1) % 2;
-        if (visitor_names != null) DisplayVisitorBoard();
+        if (visitor_names != null && st_firstVisitTime != null && st_exitTime != null) DisplayVisitorBoard();
     }
 
-//CUSTOM EVENTS
+    //CUSTOM EVENTS
     private void InitializeInformation()
     {
         Networking.SetOwner(Networking.LocalPlayer, this.gameObject);
 
         time_created = DateTime.UtcNow.Ticks;
         visitor_names = new string[namecount_MAX];
-        firstVisitTicks = new long[namecount_MAX];
-        lastVisitTicks = new long[namecount_MAX];
+        st_firstVisitTime = new string[namecount_MAX];
+        st_exitTime = new string[namecount_MAX];
 
         for (int i = 0; i < visitor_names.Length; i++)
         {
             visitor_names[i] = string.Empty;
+            st_firstVisitTime[i] = string.Empty;
+            st_exitTime[i] = string.Empty;
         }
 
         RequestSerialization();
     }
 
-    private void AddName(string name)
+    private void AddNameAndJoinStamp(string name)
     {
         for (int i = 0; i < visitor_names.Length; i++)
         {
             if (string.IsNullOrEmpty(visitor_names[i]))
             {
                 visitor_names[i] = name;
-                st_firstVisitTime[i] =  $"{new DateTime(DateTime.UtcNow.Ticks).ToLocalTime().ToString(format_time, CultureInfo.InvariantCulture)}";
+                st_firstVisitTime[i] = $"{new DateTime(DateTime.UtcNow.Ticks).ToLocalTime().ToString(format_time, CultureInfo.InvariantCulture)}";
+                st_exitTime[i] = "";
                 break;
             }
             else if (visitor_names[i] == name)
             {
+                if (useNewestJoinTime)
+                {
+                    st_firstVisitTime[i] = $"{new DateTime(DateTime.UtcNow.Ticks).ToLocalTime().ToString(format_time, CultureInfo.InvariantCulture)}";
+                }
                 break;
             }
         }
@@ -213,11 +240,11 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
     private void AddExitStamp(string name)
     {
-        for (int i = 0; i < visitor_names.length;i++)
-        { 
+        for (int i = 0; i < visitor_names.Length; i++)
+        {
             if (visitor_names[i] == name)
             {
-                st_exitTime[i] =  $"{new DateTime(DateTime.UtcNow.Ticks).ToLocalTime().ToString(format_time, CultureInfo.InvariantCulture)}";
+                st_exitTime[i] = $"{new DateTime(DateTime.UtcNow.Ticks).ToLocalTime().ToString(format_time, CultureInfo.InvariantCulture)}";
                 break;
             }
         }
@@ -236,7 +263,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         TimeSpan ts = new TimeSpan(current_tick - time_created);
 
         String tx_elapsed = "";
-        tx_elapsed += ts.TotalHours < 24 ? "" : ts.Days.ToString("0") 
+        tx_elapsed += ts.TotalHours < 24 ? "" : ts.Days.ToString("0")
             + "<size=" + small_fontsize_day.ToString() + "> DAY(s)</size>+ ";
         tx_elapsed += ts.TotalMinutes < 60 ? "" : ts.Hours.ToString("00") + ":";
         tx_elapsed += ts.TotalSeconds < 60 ? "" : ts.Minutes.ToString("00") + ":";
@@ -254,10 +281,11 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
         //有効名リスト
         int v = 0;
-        for (int i = 0; i < playersId_MAX; i++)
+        players = new VRCPlayerApi[world_capacity * 2];
+        VRCPlayerApi.GetPlayers(players);
+        foreach (VRCPlayerApi p in players)
         {
-            if (v >= visitor_names.length) break;
-            var p = VRCPlayerApi.GetPlayerById(i);
+            if (v >= visitor_names.Length) break;
             if (p != null)
             {
                 st_names_inworld[v] = p.displayName;
@@ -291,7 +319,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
             if (name_text[i] == null) continue;
 
             int nmIndex_LoopStart = cur_obj_index * name_per_object;
-            int nmIndex_LoopEnd =  (cur_obj_index + 1) * name_per_object;
+            int nmIndex_LoopEnd = (cur_obj_index + 1) * name_per_object;
             if (i == name_text.Length - 1) nmIndex_LoopEnd += lastline_overflow;
 
             string st_this_row = "";
@@ -300,7 +328,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
                 if (nmIndex >= visitor_names.Length) continue;
                 if (string.IsNullOrEmpty(visitor_names[nmIndex])) continue;
 
-                st_this_row += StringItemOfVisitor(nmIndex,is_valid_member[nmIndex]) + "\n";
+                st_this_row += StringItemOfVisitor(nmIndex, is_valid_member[nmIndex]) + "\n";
 
                 visitor_count++;
             }
@@ -310,7 +338,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         }
 
         //インスタンス作成時刻表示
-        if(time_text.text == SYNC_WAIT_MESSAGE)
+        if (time_text.text == SYNC_WAIT_MESSAGE)
         {
             time_text.text = $"{new DateTime(time_created).ToLocalTime().ToString(format_date, CultureInfo.InvariantCulture)}";
         }
@@ -324,34 +352,34 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         visitorsnumber_text.text = str_visitor;
     }
 
-    private string StringItemOfVisitor(int visitor_index,bool valid)
+    private string StringItemOfVisitor(int visitor_index, bool valid)
     {
         String st = "";
 
-        if(current_viewstat == STAT_INWORLD_VIEW)
+        if (current_viewstat == STAT_INWORLD_VIEW)
         {
             st = valid ? "<color=" + cl_inworld_code + ">" + visitor_names[visitor_index] + "</color>" :
                         "<color=" + cl_absent_code + ">" + visitor_names[visitor_index] + "</color>";
         }
-        else if(current_viewstat == STAT_ALL_VIEW)
+        else if (current_viewstat == STAT_ALL_VIEW)
         {
             st = "<color=" + cl_inworld_code + ">" + visitor_names[visitor_index] + "</color>";
         }
-        else if(current_viewstat == STAT_SHOW_TIME)
+        else if (current_viewstat == STAT_SHOW_TIME)
         {
-        //     string first = $"{new DateTime(firstVisitTicks[visitor_index]).ToLocalTime().ToString(format_time, CultureInfo.InvariantCulture)}";
-        //     string last = valid ? 
-        //     "" :
-        //     $"{new DateTime(lastVisitTicks[visitor_index]).ToLocalTime().ToString(format_time, CultureInfo.InvariantCulture)}";
-            st = valid ?  $"<color={cl_inworld_code}>[ {st_firstVisitTime[visitor_index]} - ]</color>":
-                          $"<color={cl_inworld_code}>[ {st_firstVisitTime[visitor_index]} - {st_exitTime[visitor_index]} ]</color>":
+            st = valid ? "<color=" + cl_inworld_code + ">" + visitor_names[visitor_index] + "</color>" :
+                        "<color=" + cl_absent_code + ">" + visitor_names[visitor_index] + "</color>";
+            st += "<size=" + small_fontsize_item.ToString() + "> "; 
+            st += valid ? $"<color={cl_inworld_code}>[ {st_firstVisitTime[visitor_index]} - ]</color>" :
+                          $"<color={cl_absent_code}>[ {st_firstVisitTime[visitor_index]} - {st_exitTime[visitor_index]} ]</color>";
+            st += "</size>";
         }
         else
         {
             st = "-invalid state-";
         }
 
-        return st;        
+        return st;
     }
 
     private long OldestVisitorTick()

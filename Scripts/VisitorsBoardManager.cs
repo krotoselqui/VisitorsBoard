@@ -37,7 +37,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
     [Header("Lastline Overflow(beta)")]
     [SerializeField, Range(0, 1000)] private int lastline_overflow = 200;
-str_visitor
+    
     [Header("Object Slots")]
     [SerializeField] private Text time_text = null;
     [SerializeField] private Text elapsed_text = null;
@@ -108,6 +108,7 @@ str_visitor
             }
         }
 
+        current_viewstat = STAT_INWORLD_VIEW;
         time_text.text = SYNC_WAIT_MESSAGE;
 
         if (Networking.IsOwner(this.gameObject))
@@ -219,7 +220,7 @@ str_visitor
     {
         current_viewstat = enableEntryExitTimeView ?
          (current_viewstat - STAT_NUM_OFFSET + 1) % 3 + STAT_NUM_OFFSET :
-         (current_viewstat - STAT_NUM_OFFSET + 1) % 2 + STAT_NUM_OFFSET ;
+         (current_viewstat - STAT_NUM_OFFSET + 1) % 2 + STAT_NUM_OFFSET;
     }
 
     private void AddNameAndJoinStamp(string name)
@@ -271,7 +272,7 @@ str_visitor
 
         String tx_elapsed = "";
         tx_elapsed += ts.TotalHours < 24 ? "" : ts.Days.ToString("0")
-            + SizeFixedString(" DAY(s)",small_fontsize_day);
+            + SizeFixedString(" DAY(s)", small_fontsize_day);
         tx_elapsed += ts.TotalMinutes < 60 ? "" : ts.Hours.ToString("00") + ":";
         tx_elapsed += ts.TotalSeconds < 60 ? "" : ts.Minutes.ToString("00") + ":";
         tx_elapsed += ts.Seconds.ToString("00");
@@ -356,8 +357,8 @@ str_visitor
         str_visitor_count += inworld_count >= namecount_MAX ? "+" : "";
 
         if (current_viewstat != STAT_ALL_VIEW)
-            str_visitor_count += SizeFixedString(" / " + visitor_count,int small_fontsize_membercount);
-        
+            str_visitor_count += SizeFixedString(" / " + visitor_count.ToString("00"), small_fontsize_membercount);
+
         visitorsnumber_text.text = str_visitor_count;
     }
 
@@ -367,15 +368,15 @@ str_visitor
 
         if (current_viewstat == STAT_INWORLD_VIEW)
         {
-            st = VisitorNameString(valid,visitor_names[index]);
+            st = VisitorNameString(valid, visitor_names[index]);
         }
         else if (current_viewstat == STAT_ALL_VIEW)
         {
-            st = VisitorNameString(true,visitor_names[index]);
+            st = VisitorNameString(true, visitor_names[index]);
         }
         else if (current_viewstat == STAT_SHOW_TIME)
         {
-            st = VisitorNameString(valid,visitor_names[index],st_firstVisitTime[index],st_exitTime[index]);
+            st = VisitorNameString(valid, visitor_names[index], st_firstVisitTime[index], st_exitTime[index]);
         }
         else
         {
@@ -385,16 +386,16 @@ str_visitor
         return st;
     }
 
-    private string VisitorNameString(bool valid,string name) => ColorFixedString(name,valid ? cl_inworld_code : cl_absent_code);
-    private string VisitorNameString(bool valid,string name,string joinTimeSt,string ExitTimeSt)
+    private string VisitorNameString(bool valid, string name) => ColorFixedString(name, valid ? cl_inworld_code : cl_absent_code);
+    private string VisitorNameString(bool valid, string name, string joinTimeSt, string ExitTimeSt)
     {
         string st_time = valid ?
-             "[ " + joinTimeSt + " - ]" :  "[ " + joinTimeSt + " - " + ExitTimeSt + "]";
-        return ColorFixedString(name + SizeFixedString(st_time));
+             "[ " + joinTimeSt + " - ]" : "[ " + joinTimeSt + " - " + ExitTimeSt + "]";
+        return ColorFixedString(name + SizeFixedString(st_time, small_fontsize_item), valid ? cl_inworld_code : cl_absent_code);
     }
-    private string ColorFixedString(string st,string colorCode) => "<color=" + colorCode + ">" + st + "</color>" ;
-    private string SizeFixedString(string st,int siz) => "<size=" + siz.ToString() + ">" + st + "</size>" ;
-    private string CurrentDateTimeString(string format) => 
+    private string ColorFixedString(string st, string colorCode) => "<color=" + colorCode + ">" + st + "</color>";
+    private string SizeFixedString(string st, int siz) => "<size=" + siz.ToString() + ">" + st + "</size>";
+    private string CurrentDateTimeString(string format) =>
         $"{new DateTime(DateTime.UtcNow.Ticks).ToLocalTime().ToString(format, CultureInfo.InvariantCulture)}";
 
     private long OldestVisitorTick()

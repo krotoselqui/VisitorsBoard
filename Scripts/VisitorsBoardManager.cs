@@ -9,10 +9,10 @@ using VRC.SDKBase;
 public class VisitorsBoardManager : UdonSharpBehaviour
 {
     //INSPECTOR
-    [Header("訪問者名カラーコード(在室 / #省略可)")]
+    [Header("訪問者名カラーコード(在室 / #は省略可)")]
     [SerializeField] private string cl_inworld_code = "#FFFFFF";
 
-    [Header("訪問者名カラーコード(退室後 / #省略可)")]
+    [Header("訪問者名カラーコード(退室後 / #は省略可)")]
     [SerializeField] private string cl_absent_code = "#666666";
 
     //ColorUtilityがない
@@ -37,7 +37,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
     [Header("Lastline Overflow(beta)")]
     [SerializeField, Range(0, 1000)] private int lastline_overflow = 200;
-
+str_visitor
     [Header("Object Slots")]
     [SerializeField] private Text time_text = null;
     [SerializeField] private Text elapsed_text = null;
@@ -67,7 +67,6 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     private int small_fontsize_item = 10;
 
     private int namecount_MAX = 1;
-    private int playersId_MAX = 10000;
 
     private int cur_sec = 0;
     private int prev_sec = 0;
@@ -76,9 +75,10 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     private int late_update_counter = 2;
 
     //CONSTANTS
-    private const int STAT_INWORLD_VIEW = 0;
-    private const int STAT_ALL_VIEW = 1;
-    private const int STAT_SHOW_TIME = 2;
+    private const int STAT_NUM_OFFSET = 90;
+    private const int STAT_INWORLD_VIEW = 90;
+    private const int STAT_ALL_VIEW = 91;
+    private const int STAT_SHOW_TIME = 92;
     private const int STAT_RESERVED_01 = 93;
     private const int STAT_RESERVED_02 = 94;
 
@@ -191,7 +191,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
     public override void Interact()
     {
-        current_viewstat = enableEntryExitTimeView ? (current_viewstat + 1) % 3 : (current_viewstat + 1) % 2;
+        SwitchStatToNext();
         if (visitor_names != null && st_firstVisitTime != null && st_exitTime != null) DisplayVisitorBoard();
     }
 
@@ -215,6 +215,13 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         RequestSerialization();
     }
 
+    private void SwitchStatToNext()
+    {
+        current_viewstat = enableEntryExitTimeView ?
+         (current_viewstat - STAT_NUM_OFFSET + 1) % 3 + STAT_NUM_OFFSET :
+         (current_viewstat - STAT_NUM_OFFSET + 1) % 2 + STAT_NUM_OFFSET ;
+    }
+
     private void AddNameAndJoinStamp(string name)
     {
         for (int i = 0; i < visitor_names.Length; i++)
@@ -222,7 +229,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
             if (string.IsNullOrEmpty(visitor_names[i]))
             {
                 visitor_names[i] = name;
-                st_firstVisitTime[i] = $"{new DateTime(DateTime.UtcNow.Ticks).ToLocalTime().ToString(format_time, CultureInfo.InvariantCulture)}";
+                st_firstVisitTime[i] = CurrentDateTimeString(format_time);
                 st_exitTime[i] = "";
                 break;
             }
@@ -230,7 +237,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
             {
                 if (useNewestJoinTime)
                 {
-                    st_firstVisitTime[i] = $"{new DateTime(DateTime.UtcNow.Ticks).ToLocalTime().ToString(format_time, CultureInfo.InvariantCulture)}";
+                    st_firstVisitTime[i] = CurrentDateTimeString(format_time);
                 }
                 break;
             }
@@ -244,7 +251,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         {
             if (visitor_names[i] == name)
             {
-                st_exitTime[i] = $"{new DateTime(DateTime.UtcNow.Ticks).ToLocalTime().ToString(format_time, CultureInfo.InvariantCulture)}";
+                st_exitTime[i] = CurrentDateTimeString(format_time);
                 break;
             }
         }
@@ -264,7 +271,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
         String tx_elapsed = "";
         tx_elapsed += ts.TotalHours < 24 ? "" : ts.Days.ToString("0")
-            + "<size=" + small_fontsize_day.ToString() + "> DAY(s)</size>+ ";
+            + SizeFixedString(" DAY(s)",small_fontsize_day);
         tx_elapsed += ts.TotalMinutes < 60 ? "" : ts.Hours.ToString("00") + ":";
         tx_elapsed += ts.TotalSeconds < 60 ? "" : ts.Minutes.ToString("00") + ":";
         tx_elapsed += ts.Seconds.ToString("00");
@@ -294,6 +301,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         }
 
         //名前チェック
+        //inworld_count は GetPlayerCountとは異なる
         for (int k = 0; k < visitor_names.Length; k++)
         {
             is_valid_member[k] = false;
@@ -340,39 +348,34 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         //インスタンス作成時刻表示
         if (time_text.text == SYNC_WAIT_MESSAGE)
         {
-            time_text.text = $"{new DateTime(time_created).ToLocalTime().ToString(format_date, CultureInfo.InvariantCulture)}";
+            time_text.text = CurrentDateTimeString(format_date);
         }
 
         //訪問者人数表示
-        string str_visitor = visitor_count >= namecount_MAX ? visitor_count.ToString("00") + "+" : visitor_count.ToString("00");
+        string str_visitor_count = inworld_count.ToString("00");
+        str_visitor_count += inworld_count >= namecount_MAX ? "+" : "";
+
         if (current_viewstat != STAT_ALL_VIEW)
-        {
-            str_visitor += "<size=" + small_fontsize_membercount.ToString() + ">  [CURRENT : " + inworld_count.ToString("00") + "]</size>";
-        }
-        visitorsnumber_text.text = str_visitor;
+            str_visitor_count += SizeFixedString(" / " + visitor_count,int small_fontsize_membercount);
+        
+        visitorsnumber_text.text = str_visitor_count;
     }
 
-    private string StringItemOfVisitor(int visitor_index, bool valid)
+    private string StringItemOfVisitor(int index, bool valid)
     {
         String st = "";
 
         if (current_viewstat == STAT_INWORLD_VIEW)
         {
-            st = valid ? "<color=" + cl_inworld_code + ">" + visitor_names[visitor_index] + "</color>" :
-                        "<color=" + cl_absent_code + ">" + visitor_names[visitor_index] + "</color>";
+            st = VisitorNameString(valid,visitor_names[index]);
         }
         else if (current_viewstat == STAT_ALL_VIEW)
         {
-            st = "<color=" + cl_inworld_code + ">" + visitor_names[visitor_index] + "</color>";
+            st = VisitorNameString(true,visitor_names[index]);
         }
         else if (current_viewstat == STAT_SHOW_TIME)
         {
-            st = valid ? "<color=" + cl_inworld_code + ">" + visitor_names[visitor_index] + "</color>" :
-                        "<color=" + cl_absent_code + ">" + visitor_names[visitor_index] + "</color>";
-            st += "<size=" + small_fontsize_item.ToString() + "> "; 
-            st += valid ? $"<color={cl_inworld_code}>[ {st_firstVisitTime[visitor_index]} - ]</color>" :
-                          $"<color={cl_absent_code}>[ {st_firstVisitTime[visitor_index]} - {st_exitTime[visitor_index]} ]</color>";
-            st += "</size>";
+            st = VisitorNameString(valid,visitor_names[index],st_firstVisitTime[index],st_exitTime[index]);
         }
         else
         {
@@ -381,6 +384,18 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
         return st;
     }
+
+    private string VisitorNameString(bool valid,string name) => ColorFixedString(name,valid ? cl_inworld_code : cl_absent_code);
+    private string VisitorNameString(bool valid,string name,string joinTimeSt,string ExitTimeSt)
+    {
+        string st_time = valid ?
+             "[ " + joinTimeSt + " - ]" :  "[ " + joinTimeSt + " - " + ExitTimeSt + "]";
+        return ColorFixedString(name + SizeFixedString(st_time));
+    }
+    private string ColorFixedString(string st,string colorCode) => "<color=" + colorCode + ">" + st + "</color>" ;
+    private string SizeFixedString(string st,int siz) => "<size=" + siz.ToString() + ">" + st + "</size>" ;
+    private string CurrentDateTimeString(string format) => 
+        $"{new DateTime(DateTime.UtcNow.Ticks).ToLocalTime().ToString(format, CultureInfo.InvariantCulture)}";
 
     private long OldestVisitorTick()
     {

@@ -9,17 +9,13 @@ using VRC.SDKBase;
 public class VisitorsBoardManager : UdonSharpBehaviour
 {
     //INSPECTOR
-    [Header("訪問者名カラーコード(在室 / #は省略可)")]
-    [SerializeField] private string cl_inworld_code = "#FFFFFF";
+    [Header("訪問者の名前の色")]
+    [SerializeField] private Color cl_inworld;
+    private string cl_inworld_code = "#FFFFFF";
 
-    [Header("訪問者名カラーコード(退室後 / #は省略可)")]
-    [SerializeField] private string cl_absent_code = "#666666";
-
-    //ColorUtilityがない
-    // [SerializeField]private Color cl_inworld;
-    // [SerializeField]private Color cl_absent;
-    //ColorUtility.ToHtmlStringRGB(cl_inworld);
-    //ColorUtility.ToHtmlStringRGB(cl_absent);
+    [Header("訪問者の名前の色 (退室後)")]
+    [SerializeField] private Color cl_absent;
+    private string cl_absent_code = "#666666";
 
     [Header("入退室時刻を表示への切り替えを有効にする")]
     //[Header("   ...在室表示 → 全員表示 → 在室表示... の切り替えがデフォルトですが")]
@@ -94,8 +90,8 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         if (visitorsnumber_text != null) small_fontsize_membercount = (int)(visitorsnumber_text.fontSize * 0.6f) + 1;
         if (name_text[0] != null) small_fontsize_item = (int)(name_text[0].fontSize * 0.5f) + 1;
 
-        cl_inworld_code = cl_inworld_code.StartsWith("#") ? cl_inworld_code : "#" + cl_inworld_code;
-        cl_absent_code = cl_absent_code.StartsWith("#") ? cl_absent_code : "#" + cl_absent_code;
+        cl_inworld_code = StrRGBofColor(cl_inworld);
+        cl_absent_code = StrRGBofColor(cl_absent);
 
         for (int i = 0; i < name_text.Length; i++)
         {
@@ -134,11 +130,6 @@ public class VisitorsBoardManager : UdonSharpBehaviour
                 }
             }
         }
-        else
-        {
-            //InitializeInformation();
-            return;
-        }
     }
 
     public override void OnDeserialization()
@@ -165,11 +156,6 @@ public class VisitorsBoardManager : UdonSharpBehaviour
                 DisplayVisitorBoard();
             }
         }
-        else
-        {
-            //InitializeInformation();
-            return;
-        }
     }
 
     public override void OnPlayerLeft(VRCPlayerApi player)
@@ -183,14 +169,15 @@ public class VisitorsBoardManager : UdonSharpBehaviour
                 DisplayVisitorBoard();
             }
         }
-        else
-        {
-            //InitializeInformation();
-            return;
-        }
     }
 
     public override void Interact()
+    {
+        SwitchStatToNext();
+        if (visitor_names != null && st_firstVisitTime != null && st_exitTime != null) DisplayVisitorBoard();
+    }
+
+    public void OnPickUpUseDown()
     {
         SwitchStatToNext();
         if (visitor_names != null && st_firstVisitTime != null && st_exitTime != null) DisplayVisitorBoard();
@@ -354,10 +341,14 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
         //訪問者人数表示
         string str_visitor_count = inworld_count.ToString("00");
-        str_visitor_count += inworld_count >= namecount_MAX ? "+" : "";
+        str_visitor_count += inworld_count > namecount_MAX ? "+" : "";
+
+        //string str_visitor_total_count = $"{visitor_count}";
+        string str_visitor_total_count = visitor_count.ToString("00");
+        if (visitor_count+1 >= namecount_MAX) str_visitor_total_count = "MAX";
 
         if (current_viewstat != STAT_ALL_VIEW)
-            str_visitor_count += SizeFixedString(" / " + visitor_count.ToString("00"), small_fontsize_membercount);
+            str_visitor_count += SizeFixedString(" / " + str_visitor_total_count, small_fontsize_membercount);
 
         visitorsnumber_text.text = str_visitor_count;
     }
@@ -397,6 +388,8 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     private string SizeFixedString(string st, int siz) => "<size=" + siz.ToString() + ">" + st + "</size>";
     private string CurrentDateTimeString(string format) =>
         $"{new DateTime(DateTime.UtcNow.Ticks).ToLocalTime().ToString(format, CultureInfo.InvariantCulture)}";
+    private string StrRGBofColor(Color clr) =>
+        $"#{(int)(clr.r * 255):X2}{(int)(clr.g * 255):X2}{(int)(clr.b * 255):X2}";
 
     private long OldestVisitorTick()
     {

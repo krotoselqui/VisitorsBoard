@@ -271,21 +271,15 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     {
         int visitor_count = 0;
         int inworld_count = 0;
-        string[] st_names_inworld = new string[visitor_names.Length];
-        bool[] is_valid_member = new bool[visitor_names.Length];
+        string[] st_names_inworld = new string[namecount_MAX];
+        bool[] is_valid_member = new bool[namecount_MAX];
 
         //有効名リスト
-        int v = 0;
         players = new VRCPlayerApi[world_capacity * 2];
         VRCPlayerApi.GetPlayers(players);
         foreach (VRCPlayerApi p in players)
         {
-            if (v >= visitor_names.Length) break;
-            if (p != null)
-            {
-                st_names_inworld[v] = p.displayName;
-                v++;
-            }
+            if (p != null) AddStringToArr(st_names_inworld, p.displayName, false);
         }
 
         //名前チェック
@@ -341,11 +335,13 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
         //訪問者人数表示
         string str_visitor_count = inworld_count.ToString("00");
-        str_visitor_count += inworld_count > namecount_MAX ? "+" : "";
+        //str_visitor_count += inworld_count > namecount_MAX ? "+" : "";
+
+
 
         //string str_visitor_total_count = $"{visitor_count}";
-        string str_visitor_total_count = visitor_count.ToString("00");
-        if (visitor_count+1 >= namecount_MAX) str_visitor_total_count = "MAX";
+        // string str_visitor_total_count = visitor_count.ToString("00");
+        // if (visitor_count+1 >= namecount_MAX) str_visitor_total_count = "MAX";
 
         if (current_viewstat != STAT_ALL_VIEW)
             str_visitor_count += SizeFixedString(" / " + str_visitor_total_count, small_fontsize_membercount);
@@ -375,6 +371,30 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         }
 
         return st;
+    }
+
+    private int AddStringToArr(ref string[] arr,string st,bool allowDupl = true)
+    {
+        if(!allowDupl){
+            foreach(st s in arr) if(s == st)return -1;
+        }
+
+        for(int i=0;i<arr.Length;i++)
+        {
+            if (string.IsNullOrEmpty(arr[i]))
+            {
+                arr[i] = st;
+                return i;
+            } 
+            else if(i == arr.Length -1) 
+            {
+                Array.Resize(ref arr,arr.Length+1);
+                arr[i+1]=st;
+                return i+1;
+            }
+        }
+
+        return -1;
     }
 
     private string VisitorNameString(bool valid, string name) => ColorFixedString(name, valid ? cl_inworld_code : cl_absent_code);

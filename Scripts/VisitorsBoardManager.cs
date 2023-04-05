@@ -54,9 +54,10 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     // [UdonSynced] prisync_exitTimevate string[] sync_exitTimeSt = null;
     [UdonSynced] private int[] sync_entryTime = null;
     [UdonSynced] private int[] sync_exitTime = null;
-    
+
     //INTERNAL
-    private int current_viewstat = 0;
+    //INTERNAL
+    private int current_stat_index = 0;
     private int[] stats = null;
 
     private int fontsize_small_day = 40;
@@ -97,9 +98,9 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
         namecount_MAX = (name_text.Length * name_per_object > 0) ? name_text.Length * name_per_object + last_row_overflow : 1;
 
-        if (elapsed_text != null) fontsize_small_day = GetFontSizeByScaling(elapsed_text,0.4f);
-        if (visitorsnumber_text != null) fontsize_small_membercount = GetFontSizeByScaling(visitorsnumber_text,0.6f); 
-        if (name_text != null && name_text[0] != null) fontsize_small_item = GetFontSizeByScaling(name_text[0],0.5f);
+        if (elapsed_text != null) fontsize_small_day = GetFontSizeByScaling(elapsed_text, 0.4f);
+        if (visitorsnumber_text != null) fontsize_small_membercount = GetFontSizeByScaling(visitorsnumber_text, 0.6f);
+        if (name_text != null && name_text[0] != null) fontsize_small_item = GetFontSizeByScaling(name_text[0], 0.5f);
 
         cl_inworld_code = StrRGBofColor(cl_inworld);
         cl_absent_code = StrRGBofColor(cl_absent);
@@ -115,7 +116,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
             }
         }
 
-        if(time_text != null) time_text.text = SYNC_WAIT_MESSAGE;
+        if (time_text != null) time_text.text = SYNC_WAIT_MESSAGE;
 
         if (Networking.IsOwner(this.gameObject))
         {
@@ -138,12 +139,13 @@ public class VisitorsBoardManager : UdonSharpBehaviour
             {
                 prev_sec = cur_sec;
                 DisplayElapsedTimeOfInstance();
-               
-                if(time_text.text == SYNC_WAIT_MESSAGE)
+
+                if (time_text.text == SYNC_WAIT_MESSAGE)
                 {
                     retrySyncCount++;
-                    if(retrySyncCount > retrySyncThres){
-                        Networking.SetOwner(localPlayer,this.gameObject);
+                    if (retrySyncCount > retrySyncThres)
+                    {
+                        Networking.SetOwner(localPlayer, this.gameObject);
                         InitializeInformation(true);
                         retrySyncCount = 0;
                     }
@@ -213,7 +215,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     {
         int statcount = 2; // INWORLD + ALL
         int index = statcount;
-        if(enableEntryExitTimeView) statcount++;
+        if (enableEntryExitTimeView) statcount++;
         //if(enablePositionView) statcount++;
 
         stats = new int[statcount];
@@ -221,11 +223,11 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         stats[0] = STAT_INWORLD_VIEW;
         stats[1] = STAT_ALL_VIEW;
 
-        if(enableEntryExitTimeView) stats[index++] = STAT_SHOW_TIME;
+        if (enableEntryExitTimeView) stats[index++] = STAT_SHOW_TIME;
         //if(enablePositionView) stats[index] = STAT_SHOW_POS;
     }
 
- private void InitializeInformation(bool owner)
+    private void InitializeInformation(bool owner)
     {
         if (owner)
         {
@@ -255,7 +257,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     }
 
     private void SwitchStatToNext() => current_stat_index = (current_stat_index + 1) % stats.Length;
-    
+
     private void AddNameAndJoinStamp(VRCPlayerApi vp)
     {
         if (vp == null) return;
@@ -282,7 +284,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         RequestSerialization();
     }
 
- private void AddExitStamp(VRCPlayerApi vp)
+    private void AddExitStamp(VRCPlayerApi vp)
     {
         string name = vp.displayName;
         for (int i = 0; i < sync_visitorNames.Length; i++)
@@ -324,7 +326,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     {
 
 
-        if(elapsed_text ==null)return;
+        if (elapsed_text == null) return;
         if (dontShowElapsedTime)
         {
             elapsed_text.text = "[Disabled]";
@@ -343,7 +345,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
         elapsed_text.text = tx_elapsed;
 
-        
+
     }
 
     private void DisplayVisitor()
@@ -368,7 +370,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         foreach (VRCPlayerApi p in players)
         {
             if (p != null)
-                int idx = AddStringToArr(ref st_names_inworld, p.displayName, false);
+                AddStringToArr(ref st_names_inworld, p.displayName, false);
         }
 
         //Name Check
@@ -490,7 +492,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     }
 
     private string VisitorNameString(bool valid, string name) => ColorFixedString(name, valid ? cl_inworld_code : cl_absent_code);
-   
+
     private string VisitorNameString(bool valid, string name, string joinTimeSt, string ExitTimeSt)
     {
         string st_time = valid ?
@@ -502,16 +504,22 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         string st_pos = pos.ToString();
         return ColorFixedString(name + SizeFixedString(" " + st_pos, fontsize_small_item), valid ? cl_inworld_code : cl_absent_code);
     }
+    private bool SyncAllValid() =>
+    sync_createdTick != 0 &&
+    sync_visitorNames != null &&
+    sync_entryTime != null &&
+    sync_exitTime != null;
 
     #region DETACHABLE
 
     private string ColorFixedString(string st, Color clr) => TaggedString("color", StrRGBofColor(clr), st);
     private string ColorFixedString(string st, string colorCode) => TaggedString("color", colorCode, st);
-    private string GetFontSizeByScaling(text origText, float ratio) {
-        if(origText == null) return "[origText null]";
+    private int GetFontSizeByScaling(Text origText, float ratio)
+    {
+        if (origText == null) return 10;
         return (int)(origText.fontSize * ratio) + 1;
     }
-    private string SizeFixedString(string st, Text origText, float ratio) => SizeFixedString(st,GetFontSizeByScaling(origText,ratio));
+    private string SizeFixedString(string st, Text origText, float ratio) => SizeFixedString(st, GetFontSizeByScaling(origText, ratio));
     private string SizeFixedString(string st, int siz) => TaggedString("size", siz.ToString(), st);
     private string TaggedString(string tagName, string param, string content) => "<" + tagName + "=" + param + ">" + content + "</" + tagName + ">";
     private string CurrentDateTimeString(string format) => GetUtcNow().ToLocalTime().ToString(format, CultureInfo.InvariantCulture);

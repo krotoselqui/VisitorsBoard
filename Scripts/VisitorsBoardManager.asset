@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c333ccfdd0cbdbc4ca30cef2dd6e6b9b, type: 3}
   m_Name: VisitorsBoardManager
   m_EditorClassIdentifier: 
-  serializedUdonProgramAsset: {fileID: 11400000, guid: 629f28c6005449944b6d200c622f845e,
+  serializedUdonProgramAsset: {fileID: 11400000, guid: 656990fdc2e35724cbb308b004f35157,
     type: 2}
   udonAssembly: 
   assemblyError: 

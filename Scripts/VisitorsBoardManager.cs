@@ -20,6 +20,9 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     [Header("入退室時刻を表示への切り替えを有効にする")]
     [SerializeField] private bool enableEntryExitTimeView = false;
 
+    [Header("BASE64確認表示の切り替えを有効にする")]
+    [SerializeField] private bool enableBase64View = false;
+
     [Header("インスタンス経過時間を表示しない")]
     [SerializeField] private bool dontShowElapsedTime = false;
 
@@ -217,6 +220,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         int index = statcount;
         if (enableEntryExitTimeView) statcount++;
         //if(enablePositionView) statcount++;
+        if (enableBase64View) statcount++;
 
         stats = new int[statcount];
 
@@ -225,6 +229,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
         if (enableEntryExitTimeView) stats[index++] = STAT_SHOW_TIME;
         //if(enablePositionView) stats[index] = STAT_SHOW_POS;
+        if (enableBase64View) stats[index++] = STAT_BASE64;
     }
 
     private void InitializeInformation(bool owner)
@@ -446,6 +451,12 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         //{
         //    st = VisitorNameString(valid, sync_visitorNames[index], sync_position[index], sync_rotation[index]);
         //}
+        else if (cur_stat == STAT_BASE64)
+        {
+            int bc;
+            string st_plainb64 = ToBase64(sync_visitorNames[index], out bc);
+            st = VisitorNameString(valid, $"{bc:00} {st_plainb64}");
+        }
         else
         {
             st = "(undefined)";
@@ -564,6 +575,44 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         Array.Copy(tmpAry, ary, newLen);
 
         return newLen;
+    }
+
+    private int _;
+    private string ToBase64(string st) => ToBase64(st, out _);
+    private string ToBase64(string st, out int byteCount)
+    {
+        string inputString = st;
+        byte[] utf8Bytes = new byte[inputString.Length * 4];
+        byteCount = 0;
+        foreach (char c in inputString)
+        {
+            if (c <= 0x7F) // 1 byte
+            {
+                utf8Bytes[byteCount++] = (byte)c;
+            }
+            else if (c <= 0x7FF) // 2 bytes
+            {
+                utf8Bytes[byteCount++] = (byte)(0xC0 | (c >> 6));
+                utf8Bytes[byteCount++] = (byte)(0x80 | (c & 0x3F));
+            }
+            else if (c <= 0xFFFF) // 3 bytes
+            {
+                utf8Bytes[byteCount++] = (byte)(0xE0 | (c >> 12));
+                utf8Bytes[byteCount++] = (byte)(0x80 | ((c >> 6) & 0x3F));
+                utf8Bytes[byteCount++] = (byte)(0x80 | (c & 0x3F));
+            }
+            else if (c <= 0x10FFFF) // 4 bytes
+            {
+                utf8Bytes[byteCount++] = (byte)(0xF0 | (c >> 18));
+                utf8Bytes[byteCount++] = (byte)(0x80 | ((c >> 12) & 0x3F));
+                utf8Bytes[byteCount++] = (byte)(0x80 | ((c >> 6) & 0x3F));
+                utf8Bytes[byteCount++] = (byte)(0x80 | (c & 0x3F));
+            }
+        }
+        // Delete Extra Bytes
+        byte[] resultBytes = new byte[byteCount];
+        Array.Copy(utf8Bytes, resultBytes, byteCount);
+        return Convert.ToBase64String(resultBytes);
     }
 
     #endregion

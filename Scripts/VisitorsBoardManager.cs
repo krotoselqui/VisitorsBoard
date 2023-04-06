@@ -59,7 +59,6 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     [UdonSynced] private int[] sync_exitTime = null;
 
     //INTERNAL
-    //INTERNAL
     private int current_stat_index = 0;
     private int[] stats = null;
 
@@ -143,7 +142,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
                 prev_sec = cur_sec;
                 DisplayElapsedTimeOfInstance();
 
-                if (time_text.text == SYNC_WAIT_MESSAGE)
+                if (sync_createdTick == 0)
                 {
                     retrySyncCount++;
                     if (retrySyncCount > retrySyncThres)
@@ -329,8 +328,6 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
     private void DisplayElapsedTimeOfInstance()
     {
-
-
         if (elapsed_text == null) return;
         if (dontShowElapsedTime)
         {
@@ -349,13 +346,12 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         tx_elapsed += ts.Seconds.ToString("00");
 
         elapsed_text.text = tx_elapsed;
-
-
     }
 
     private void DisplayVisitor()
     {
         if (!SyncAllValid()) return;
+        
 
         int visitor_count = 0;
         int inworld_count = VRCPlayerApi.GetPlayerCount();
@@ -363,12 +359,19 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         string[] st_names_inworld = new string[inworld_count];
         bool[] is_valid_member = new bool[namecount_MAX];
 
-
-        if (time_text != null && time_text.text == SYNC_WAIT_MESSAGE)
+        if(time_text != null)
         {
-            time_text.text = CurrentDateTimeString(format_date);
+            time_text.text = CreatedDateTimeString(format_date);
+            // if (time_text.text == SYNC_WAIT_MESSAGE)
+            // {
+            //     time_text.text = CurrentDateTimeString(format_date);
+            // }
+            // else
+            // {
+            //     time_text.text = $"{new DateTime(time_created).ToLocalTime()
+            //                     .ToString(format_date, CultureInfo.InvariantCulture)}";
+            // }
         }
-
         //Valid Name Pick
         players = new VRCPlayerApi[world_capacity * 2];
         VRCPlayerApi.GetPlayers(players);
@@ -503,11 +506,9 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     }
 
     private string VisitorNameString(bool valid, string name) => ColorFixedString(name, valid ? cl_inworld_code : cl_absent_code);
-
     private string VisitorNameString(bool valid, string name, string joinTimeSt, string ExitTimeSt)
     {
-        string st_time = valid ?
-             "[ " + joinTimeSt + " - ]" : "[ " + joinTimeSt + " - " + ExitTimeSt + "]";
+        string st_time = valid ? $"[{joinTimeSt} - ]" : $"[{joinTimeSt} - {ExitTimeSt}]";
         return ColorFixedString(name + SizeFixedString(st_time, fontsize_small_item), valid ? cl_inworld_code : cl_absent_code);
     }
     private string VisitorNameString(bool valid, string name, Vector3 pos, Quaternion rot)
@@ -521,6 +522,13 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     sync_entryTime != null &&
     sync_exitTime != null;
 
+    
+    private DateTime GetCreatedDT() => sync_createdTick > 0 ? new DateTime(sync_createdTick) : null;
+    //private string CreatedDateTimeString(string format) => GetCreatedDT().ToLocalTime().ToString(format, CultureInfo.InvariantCulture);
+    private string CreatedDateTimeString(string format) 
+        => sync_createdTick > 0 ? DateTimeStringByGlobalTick(sync_createdTick,format) : "invalid date";
+    private string CreatedDateTimeString() => CreatedDateTimeString(format_date);
+
     #region DETACHABLE
 
     private string ColorFixedString(string st, Color clr) => TaggedString("color", StrRGBofColor(clr), st);
@@ -533,11 +541,16 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     private string SizeFixedString(string st, Text origText, float ratio) => SizeFixedString(st, GetFontSizeByScaling(origText, ratio));
     private string SizeFixedString(string st, int siz) => TaggedString("size", siz.ToString(), st);
     private string TaggedString(string tagName, string param, string content) => "<" + tagName + "=" + param + ">" + content + "</" + tagName + ">";
-    private string CurrentDateTimeString(string format) => GetUtcNow().ToLocalTime().ToString(format, CultureInfo.InvariantCulture);
-    private int DateTimeToHourMinInt(DateTime dt) => (dt.Hour << 6) + dt.Minute;
-    private string HourMinIntToString(int hourMin) => $"{hourMin >> 6}:{hourMin & 0b00111111:00}";
-    //private DateTime GetUtcNow() => new DateTime(DateTime.UtcNow.Ticks).ToLocalTime();
+
     private DateTime GetUtcNow() => new DateTime(DateTime.UtcNow.Ticks);
+    private string CurrentDateTimeString(string format) => GetUtcNow().ToLocalTime().ToString(format, CultureInfo.InvariantCulture);
+    private string DateTimeStringByGlobalTick(long glb_tick,string format) 
+        => new DateTime(glb_tick).ToLocalTime().ToString(format, CultureInfo.InvariantCulture);
+
+    private int DateTimeToHourMinInt(DateTime dt) => (dt.Hour << 6) + dt.Minute;
+
+    private string HourMinIntToString(int hourMin) => $"{hourMin >> 6}:{hourMin & 0b00111111:00}";
+
     private string StrRGBofColor(Color clr) => $"#{(int)(clr.r * 0xff):X2}{(int)(clr.g * 0xff):X2}{(int)(clr.b * 0xff):X2}";
     private static int StringArrayResize(ref string[] ary, int newLen = -1)
     {

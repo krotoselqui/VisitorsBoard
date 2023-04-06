@@ -56,7 +56,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
     //INTERNAL
     private int current_stat_index = 0;
-    private int[] stats = null;
+    private int[] stats_viewMode = null;
 
     private int fontsize_small_day = 40;
     private int fontsize_small_membercount = 30;
@@ -203,14 +203,14 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         //if(enablePositionView) statcount++;
         if (enableBase64View) statcount++;
 
-        stats = new int[statcount];
+        stats_viewMode = new int[statcount];
 
-        stats[0] = STAT_INWORLD_VIEW;
-        stats[1] = STAT_ALL_VIEW;
+        stats_viewMode[0] = STAT_INWORLD_VIEW;
+        stats_viewMode[1] = STAT_ALL_VIEW;
 
-        if (enableEntryExitTimeView) stats[index++] = STAT_SHOW_TIME;
-        //if(enablePositionView) stats[index] = STAT_SHOW_POS;
-        if (enableBase64View) stats[index++] = STAT_BASE64;
+        if (enableEntryExitTimeView) stats_viewMode[index++] = STAT_SHOW_TIME;
+        //if(enablePositionView) stats_viewMode[index] = STAT_SHOW_POS;
+        if (enableBase64View) stats_viewMode[index++] = STAT_BASE64;
     }
 
     private void InitializeInformation(bool owner,bool restore = false)
@@ -254,46 +254,47 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         }
     }
 
-    private void SwitchStatToNext() => current_stat_index = (current_stat_index + 1) % stats.Length;
+    private void SwitchStatToNext() => current_stat_index = (current_stat_index + 1) % stats_viewMode.Length;
 
-    private void AddNameAndJoinStamp(VRCPlayerApi vp,bool req_serialize = true)
+ 	private void AddNameAndJoinStamp(VRCPlayerApi vp,out int index,bool req_serialize = true)
     {
         if (vp == null) return;
         string name = vp.displayName;
-
+        index = -1;
         for (int i = 0; i < sync_visitorNames.Length; i++)
         {
             if (string.IsNullOrEmpty(sync_visitorNames[i]))
             {
                 sync_visitorNames[i] = name;
-                // sync_entryTime[i] = DateTimeToHourMinInt(currentTimeShared.ToLocalTime());
                 sync_timeStampPack[i] = DateTimeToHourMinInt(currentTimeShared.ToLocalTime()) << 16;
+                index = i;
                 break;
             }
             else if (sync_visitorNames[i] == name)
             {
                 if (useNewestJoinTime)
                 {
-                    // sync_entryTime[i] = DateTimeToHourMinInt(currentTimeShared.ToLocalTime());
-                    // sync_exitTime[i] = -1;
                     sync_timeStampPack[i] = DateTimeToHourMinInt(currentTimeShared.ToLocalTime()) << 16;
                 }
+                index = i;
                 break;
             }
         }
         if (req_serialize) RequestSerialization();
     }
 
-    private void AddExitStamp(VRCPlayerApi vp)
+    private void AddExitStamp(VRCPlayerApi vp,out int index)
     {
+        if (vp == null) return;
         string name = vp.displayName;
+        index = -1;
         for (int i = 0; i < sync_visitorNames.Length; i++)
         {
             if (sync_visitorNames[i] == name)
             {
-                // sync_exitTime[i] = DateTimeToHourMinInt(currentTimeShared.ToLocalTime());
                 sync_timeStampPack[i] &= 0xFFFF0000;
                 sync_timeStampPack[i] |= DateTimeToHourMinInt(currentTimeShared.ToLocalTime());
+                index = i;
                 break;
             }
         }
@@ -382,7 +383,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         string str_visitor_total_count = visitor_count.ToString("00");
         if (visitor_count >= namecount_MAX) str_visitor_total_count = "MAX";
 
-        if (stats[current_stat_index] != STAT_ALL_VIEW)
+        if (stats_viewMode[current_stat_index] != STAT_ALL_VIEW)
         {
             str_visitor_count = inworld_count.ToString("00");
             str_visitor_count += SizeFixedString(" / " + str_visitor_total_count, fontsize_small_membercount);
@@ -398,7 +399,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     private string StringItemOfVisitor(int index, bool valid)
     {
         String st = "";
-        int cur_stat = stats[current_stat_index];
+        int cur_stat = stats_viewMode[current_stat_index];
 
         if (cur_stat == STAT_INWORLD_VIEW)
         {

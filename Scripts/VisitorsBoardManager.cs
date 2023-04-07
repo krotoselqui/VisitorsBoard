@@ -8,14 +8,16 @@ using VRC.SDKBase;
 [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
 public class VisitorsBoardManager : UdonSharpBehaviour
 {
+#region FIELDS
+
     //INSPECTOR
     [Header("訪問者の名前の色")]
     [SerializeField] private Color cl_inworld;
-    private string cl_inworld_code = "#FFFFFF";
+    private string colorCodeAttendingMember = "#FFFFFF";
 
     [Header("訪問者の名前の色 (退室後)")]
     [SerializeField] private Color cl_absent;
-    private string cl_absent_code = "#666666";
+    private string colorCodeLeftMember = "#666666";
 
     [Header("入退室時刻を表示への切り替えを有効にする")]
     [SerializeField] private bool enableEntryExitTimeView = false;
@@ -30,10 +32,10 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     [SerializeField] private bool useNewestJoinTime = true;
 
     [Header("１列に入る人数")]
-    [SerializeField, Range(1, 100)] private int name_per_object = 20;
+    [SerializeField, Range(1, 100)] private int namePerObject = 20;
 
     [Header("最終列溢れ人数")]
-    [SerializeField, Range(0, 1000)] private int last_row_overflow = 200;
+    [SerializeField, Range(0, 1000)] private int lastRowAdditionalLine = 200;
 
     [Header("Object Slots")]
     [SerializeField] private Text time_text = null;
@@ -42,10 +44,10 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     [SerializeField] private Text[] name_text = null;
 
     [Header("Date Format - Header")]
-    [SerializeField] private string format_date = "yyyy-MM-dd  HH:mm:ss";
+    [SerializeField] private string formatDate = "yyyy-MM-dd  HH:mm:ss";
 
     [Header("Time Format - Member")]
-    [SerializeField] private string format_time = "HH:mm";
+    [SerializeField] private string formatTime = "HH:mm";
 
     //SYNCED
     [UdonSynced] private long sync_createdTick = 0;
@@ -53,27 +55,26 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     [UdonSynced] private int[] sync_timeStampPack = null;
 
     //INTERNAL
-    private int current_stat_index = 0;
-    private int[] stats_viewMode = null;
-
-    private int fontsize_small_day = 40;
-    private int fontsize_small_membercount = 30;
-    private int fontsize_small_item = 10;
-
-    private int namecount_MAX = 1;
-
-    private int cur_sec = 0;
-    private int prev_sec = 0;
+    private int currentStatIndex = 0;
+    private int[] statsViewMode = null;
+    private int smallFontSizeDay = 40;
+    private int smallFontSizeMemberCount = 30;
+    private int smallFontSizeItem = 10;
+    private int nameCountMAX = 1;
     VRCPlayerApi[] players = null;
     VRCPlayerApi localPlayer = null;
-    private int retrySyncCount = 0;
-    private int retrySyncThres = 60;
-    private int world_max_capacity = 64;
-
-    private int late_update_counter = 2;
+    private int syncErrCount = 0;
+    private int resetSyncErrCount = 60;
     private DateTime currentTimeShared = new DateTime();
 
+    //INTERNAL MINOR
+    private int cur_sec = 0;
+    private int prev_sec = 0;
+    private int late_update_counter = 2;
+
     //CONSTANTS
+    private const int TIME_DELAY_UPDATE = 2;
+    private const int WORLD_MAX_CAPACITY = 64;
     private const int STAT_INWORLD_VIEW = 90;
     private const int STAT_ALL_VIEW = 91;
     private const int STAT_SHOW_TIME = 92;
@@ -81,31 +82,32 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     private const int STAT_BASE64 = 94;
     private const int STAT_ACHIEVE = 95;
     private const int STAT_OPTIONS = 96;
-
     private const string SYNC_WAIT_MESSAGE = "Waiting for sync...";
+
+#endregion
 
     //UNITY EVENTS
     private void Start()
     {
-        VRCPlayerApi[] players = new VRCPlayerApi[world_max_capacity * 2];
+        VRCPlayerApi[] players = new VRCPlayerApi[WORLD_MAX_CAPACITY * 2];
         AllocStats();
-        current_stat_index = 0;
+        currentStatIndex = 0;
 
         localPlayer = Networking.LocalPlayer;
 
-        namecount_MAX = (name_text.Length * name_per_object > 0) ? name_text.Length * name_per_object + last_row_overflow : 1;
+        nameCountMAX = (name_text.Length * namePerObject > 0) ? name_text.Length * namePerObject + lastRowAdditionalLine : 1;
 
-        if (elapsed_text != null) fontsize_small_day = GetFontSizeByScaling(elapsed_text, 0.4f);
-        if (visitorsnumber_text != null) fontsize_small_membercount = GetFontSizeByScaling(visitorsnumber_text, 0.6f);
-        if (name_text != null && name_text[0] != null) fontsize_small_item = GetFontSizeByScaling(name_text[0], 0.5f);
+        if (elapsed_text != null) smallFontSizeDay = GetFontSizeByScaling(elapsed_text, 0.4f);
+        if (visitorsnumber_text != null) smallFontSizeMemberCount = GetFontSizeByScaling(visitorsnumber_text, 0.6f);
+        if (name_text != null && name_text[0] != null) smallFontSizeItem = GetFontSizeByScaling(name_text[0], 0.5f);
 
-        cl_inworld_code = StrRGBofColor(cl_inworld);
-        cl_absent_code = StrRGBofColor(cl_absent);
+        colorCodeAttendingMember = StrRGBofColor(cl_inworld);
+        colorCodeLeftMember = StrRGBofColor(cl_absent);
 
         for (int i = 0; i < name_text.Length; i++)
         {
             if (name_text[i] == null) continue;
-            if (name_per_object > 1)
+            if (namePerObject > 1)
             {
                 name_text[i].alignment = TextAnchor.UpperCenter;
                 name_text[i].verticalOverflow = VerticalWrapMode.Overflow;
@@ -145,12 +147,12 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
             if (sync_createdTick == 0)
             {
-                retrySyncCount++;
-                if (retrySyncCount > retrySyncThres)
+                syncErrCount++;
+                if (syncErrCount > resetSyncErrCount)
                 {
                     Networking.SetOwner(localPlayer, this.gameObject);
                     InitializeInformation(true, true);
-                    retrySyncCount = 0;
+                    syncErrCount = 0;
                 }
             }
         }
@@ -166,7 +168,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     public override void OnPlayerJoined(VRCPlayerApi player)
     {
         if (!SyncAllValid()) return;
-        late_update_counter = 3;
+        late_update_counter = TIME_DELAY_UPDATE;
         if (Networking.IsOwner(this.gameObject))
         {
             AddNameAndJoinStamp(player, out _);
@@ -177,7 +179,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     public override void OnPlayerLeft(VRCPlayerApi player)
     {
         if (!SyncAllValid()) return;
-        late_update_counter = 3;
+        late_update_counter = TIME_DELAY_UPDATE;
         if (Networking.IsOwner(this.gameObject))
         {
             AddExitStamp(player, out _);
@@ -201,14 +203,14 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         //if(enablePositionView) statcount++;
         if (enableBase64View) statcount++;
 
-        stats_viewMode = new int[statcount];
+        statsViewMode = new int[statcount];
 
-        stats_viewMode[0] = STAT_INWORLD_VIEW;
-        stats_viewMode[1] = STAT_ALL_VIEW;
+        statsViewMode[0] = STAT_INWORLD_VIEW;
+        statsViewMode[1] = STAT_ALL_VIEW;
 
-        if (enableEntryExitTimeView) stats_viewMode[index++] = STAT_SHOW_TIME;
-        //if(enablePositionView) stats_viewMode[index] = STAT_SHOW_POS;
-        if (enableBase64View) stats_viewMode[index++] = STAT_BASE64;
+        if (enableEntryExitTimeView) statsViewMode[index++] = STAT_SHOW_TIME;
+        //if(enablePositionView) statsViewMode[index] = STAT_SHOW_POS;
+        if (enableBase64View) statsViewMode[index++] = STAT_BASE64;
     }
 
     private void InitializeInformation(bool owner, bool restore = false)
@@ -218,8 +220,8 @@ public class VisitorsBoardManager : UdonSharpBehaviour
             Networking.SetOwner(Networking.LocalPlayer, this.gameObject);
 
             sync_createdTick = DateTime.UtcNow.Ticks;
-            sync_visitorNames = new string[namecount_MAX];
-            sync_timeStampPack = new int[namecount_MAX];
+            sync_visitorNames = new string[nameCountMAX];
+            sync_timeStampPack = new int[nameCountMAX];
 
             for (int i = 0; i < sync_visitorNames.Length; i++)
             {
@@ -229,7 +231,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
             if (restore)
             {
-                players = new VRCPlayerApi[world_max_capacity * 2];
+                players = new VRCPlayerApi[WORLD_MAX_CAPACITY * 2];
                 VRCPlayerApi.GetPlayers(players);
                 foreach (VRCPlayerApi vp in players)
                 {
@@ -241,12 +243,12 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         else
         {
             sync_createdTick = DateTime.UtcNow.Ticks;
-            sync_visitorNames = new string[namecount_MAX];
-            sync_timeStampPack = new int[namecount_MAX];
+            sync_visitorNames = new string[nameCountMAX];
+            sync_timeStampPack = new int[nameCountMAX];
         }
     }
 
-    private void SwitchStatToNext() => current_stat_index = (current_stat_index + 1) % stats_viewMode.Length;
+    private void SwitchStatToNext() => currentStatIndex = (currentStatIndex + 1) % statsViewMode.Length;
 
     private void AddNameAndJoinStamp(VRCPlayerApi vp, out int index, bool req_serialize = true)
     {
@@ -310,7 +312,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
         String tx_elapsed = "";
         tx_elapsed += ts.TotalHours < 24 ? "" : ts.Days.ToString("0")
-            + SizeFixedString(" DAY(s) + ", fontsize_small_day);
+            + SizeFixedString(" DAY(s) + ", smallFontSizeDay);
         tx_elapsed += ts.TotalMinutes < 60 ? "" : ts.Hours.ToString("00") + ":";
         tx_elapsed += ts.TotalSeconds < 60 ? "" : ts.Minutes.ToString("00") + ":";
         tx_elapsed += ts.Seconds.ToString("00");
@@ -323,29 +325,29 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         if (!SyncAllValid()) return;
 
         int visitor_count = 0;
-        int inworld_count = VRCPlayerApi.GetPlayerCount();
+        int attending_count = VRCPlayerApi.GetPlayerCount();
 
-        string[] st_names_inworld = new string[inworld_count];
-        bool[] is_valid_member = new bool[namecount_MAX];
+        string[] st_names_attending = new string[attending_count];
+        bool[] is_valid_member = new bool[nameCountMAX];
 
         //Created Time
         if (time_text != null)
         {
-            time_text.text = CreatedDateTimeString(format_date);
+            time_text.text = CreatedDateTimeString(formatDate);
         }
 
         //Valid Name Pick
-        players = new VRCPlayerApi[world_max_capacity * 2];
+        players = new VRCPlayerApi[WORLD_MAX_CAPACITY * 2];
         VRCPlayerApi.GetPlayers(players);
         foreach (VRCPlayerApi vp in players)
         {
-            if (vp != null) AddStringToArr(ref st_names_inworld, vp.displayName, false);
+            if (vp != null) AddStringToArr(ref st_names_attending, vp.displayName, false);
         }
 
         //Name Check
         for (int k = 0; k < sync_visitorNames.Length; k++)
         {
-            int findIndex = IndexFindInArr(st_names_inworld, sync_visitorNames[k]);
+            int findIndex = IndexFindInArr(st_names_attending, sync_visitorNames[k]);
             is_valid_member[k] = findIndex != -1;
         }
 
@@ -355,9 +357,9 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         {
             if (name_text[i] == null) continue;
 
-            int nmIndex_LoopStart = cur_obj_index * name_per_object;
-            int nmIndex_LoopEnd = (cur_obj_index + 1) * name_per_object;
-            if (i == name_text.Length - 1) nmIndex_LoopEnd += last_row_overflow;
+            int nmIndex_LoopStart = cur_obj_index * namePerObject;
+            int nmIndex_LoopEnd = (cur_obj_index + 1) * namePerObject;
+            if (i == name_text.Length - 1) nmIndex_LoopEnd += lastRowAdditionalLine;
 
             string st_this_row = "";
             for (int nmIndex = nmIndex_LoopStart; nmIndex < nmIndex_LoopEnd; nmIndex++)
@@ -377,12 +379,12 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         string str_visitor_count = "";
 
         string str_visitor_total_count = visitor_count.ToString("00");
-        if (visitor_count >= namecount_MAX) str_visitor_total_count = "MAX";
+        if (visitor_count >= nameCountMAX) str_visitor_total_count = "MAX";
 
-        if (stats_viewMode[current_stat_index] != STAT_ALL_VIEW)
+        if (statsViewMode[currentStatIndex] != STAT_ALL_VIEW)
         {
-            str_visitor_count = inworld_count.ToString("00");
-            str_visitor_count += SizeFixedString(" / " + str_visitor_total_count, fontsize_small_membercount);
+            str_visitor_count = attending_count.ToString("00");
+            str_visitor_count += SizeFixedString(" / " + str_visitor_total_count, smallFontSizeMemberCount);
         }
         else
         {
@@ -395,7 +397,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     private string StringItemOfVisitor(int index, bool valid)
     {
         String st = "";
-        int cur_stat = stats_viewMode[current_stat_index];
+        int cur_stat = statsViewMode[currentStatIndex];
 
         if (cur_stat == STAT_INWORLD_VIEW)
         {
@@ -466,16 +468,16 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         return -1;
     }
 
-    private string VisitorNameString(bool valid, string name) => ColorFixedString(name, valid ? cl_inworld_code : cl_absent_code);
+    private string VisitorNameString(bool valid, string name) => ColorFixedString(name, valid ? colorCodeAttendingMember : colorCodeLeftMember);
     private string VisitorNameString(bool valid, string name, string joinTimeSt, string ExitTimeSt)
     {
         string st_time = valid ? $"[{joinTimeSt} - ]" : $"[{joinTimeSt} - {ExitTimeSt}]";
-        return ColorFixedString(name + SizeFixedString(st_time, fontsize_small_item), valid ? cl_inworld_code : cl_absent_code);
+        return ColorFixedString(name + SizeFixedString(st_time, smallFontSizeItem), valid ? colorCodeAttendingMember : colorCodeLeftMember);
     }
     private string VisitorNameString(bool valid, string name, Vector3 pos, Quaternion rot)
     {
         string st_pos = pos.ToString();
-        return ColorFixedString(name + SizeFixedString(" " + st_pos, fontsize_small_item), valid ? cl_inworld_code : cl_absent_code);
+        return ColorFixedString(name + SizeFixedString(" " + st_pos, smallFontSizeItem), valid ? colorCodeAttendingMember : colorCodeLeftMember);
     }
     private bool SyncAllValid() =>
     sync_createdTick != 0 &&
@@ -487,7 +489,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     //private string CreatedDateTimeString(string format) => GetCreatedDT().ToLocalTime().ToString(format, CultureInfo.InvariantCulture);
     private string CreatedDateTimeString(string format)
         => sync_createdTick > 0 ? DateTimeStringByGlobalTick(sync_createdTick, format) : "invalid date";
-    private string CreatedDateTimeString() => CreatedDateTimeString(format_date);
+    private string CreatedDateTimeString() => CreatedDateTimeString(formatDate);
 
     #region DETACHABLE
 

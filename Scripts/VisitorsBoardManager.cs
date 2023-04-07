@@ -50,9 +50,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     //SYNCED
     [UdonSynced] private long sync_createdTick = 0;
     [UdonSynced] private string[] sync_visitorNames = null;
-    // [UdonSynced] private int[] sync_entryTime = null;
-    // [UdonSynced] private int[] sync_exitTime = null;
-    [UdonSynced] private uint[] sync_timeStampPack = null;
+    [UdonSynced] private int[] sync_timeStampPack = null;
 
     //INTERNAL
     private int current_stat_index = 0;
@@ -221,15 +219,11 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
             sync_createdTick = DateTime.UtcNow.Ticks;
             sync_visitorNames = new string[namecount_MAX];
-            // sync_entryTime = new int[namecount_MAX];
-            // sync_exitTime = new int[namecount_MAX];
-            sync_timeStampPack = new uint[namecount_MAX];
+            sync_timeStampPack = new int[namecount_MAX];
 
             for (int i = 0; i < sync_visitorNames.Length; i++)
             {
                 sync_visitorNames[i] = string.Empty;
-                // sync_entryTime[i] = -1;
-                // sync_exitTime[i] = -1;
                 sync_timeStampPack[i] = 0;
             }
 
@@ -248,9 +242,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         {
             sync_createdTick = DateTime.UtcNow.Ticks;
             sync_visitorNames = new string[namecount_MAX];
-            // sync_entryTime = new int[namecount_MAX];
-            // sync_exitTime = new int[namecount_MAX];
-            sync_timeStampPack = new uint[namecount_MAX];
+            sync_timeStampPack = new int[namecount_MAX];
         }
     }
 
@@ -258,19 +250,17 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
     private void AddNameAndJoinStamp(VRCPlayerApi vp, out int index, bool req_serialize = true)
     {
-        if (vp == null)
-        {
-            index = -1;
-            return;
-        }
-        string name = vp.displayName;
         index = -1;
+        if (vp == null) return;
+        
+        string name = vp.displayName;
+  
         for (int i = 0; i < sync_visitorNames.Length; i++)
         {
             if (string.IsNullOrEmpty(sync_visitorNames[i]))
             {
                 sync_visitorNames[i] = name;
-                sync_timeStampPack[i] = (uint)DateTimeToHourMinInt(currentTimeShared.ToLocalTime()) << 16;
+                sync_timeStampPack[i] = DateTimeToHourMinInt(currentTimeShared.ToLocalTime()) << 16;
                 index = i;
                 break;
             }
@@ -278,7 +268,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
             {
                 if (useNewestJoinTime)
                 {
-                    sync_timeStampPack[i] = (uint)DateTimeToHourMinInt(currentTimeShared.ToLocalTime()) << 16;
+                    sync_timeStampPack[i] = DateTimeToHourMinInt(currentTimeShared.ToLocalTime()) << 16;
                 }
                 index = i;
                 break;
@@ -289,19 +279,17 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
     private void AddExitStamp(VRCPlayerApi vp, out int index)
     {
-        if (vp == null)
-        {
-            index = -1;
-            return;
-        }
-        string name = vp.displayName;
         index = -1;
+        if (vp == null) return;
+
+        string name = vp.displayName;
+  
         for (int i = 0; i < sync_visitorNames.Length; i++)
         {
             if (sync_visitorNames[i] == name)
             {
                 sync_timeStampPack[i] &= 0xFFFF0000;
-                sync_timeStampPack[i] |= (uint)DateTimeToHourMinInt(currentTimeShared.ToLocalTime());
+                sync_timeStampPack[i] |= DateTimeToHourMinInt(currentTimeShared.ToLocalTime());
                 index = i;
                 break;
             }
@@ -419,13 +407,9 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         }
         else if (cur_stat == STAT_SHOW_TIME)
         {
-            // st = VisitorNameString(valid, sync_visitorNames[index],
-            // HourMinIntToString(sync_entryTime[index]),
-            // HourMinIntToString(sync_exitTime[index]));
-
             st = VisitorNameString(valid, sync_visitorNames[index],
-            HourMinIntToString((int)(sync_timeStampPack[index] >> 16)),
-            HourMinIntToString((int)(sync_timeStampPack[index] & 0xFFFF0000)));
+            HourMinIntToString(sync_timeStampPack[index] >> 16),
+            HourMinIntToString(sync_timeStampPack[index] & 0x0000FFFF);
         }
         //else if (cur_stat == STAT_SHOW_POS)
         //{

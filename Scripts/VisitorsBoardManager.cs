@@ -65,6 +65,8 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     VRCPlayerApi localPlayer = null;
     private int syncErrCount = 0;
     private int resetSyncErrCount = 60;
+    private int nameErrCount = 0;
+    private int restoreNameErrCount = 5;
     private DateTime currentTimeShared = new DateTime();
 
     //INTERNAL MINOR
@@ -139,22 +141,33 @@ public class VisitorsBoardManager : UdonSharpBehaviour
             prev_sec = cur_sec;
             if (sync_valid) DisplayElapsedTimeOfInstance();
 
+            //detect errors - whole
+            // if (sync_createdTick == 0) syncErrCount++;
+            if (!sync_valid) syncErrCount++;
+            if (syncErrCount > resetSyncErrCount)
+            {
+                Networking.SetOwner(localPlayer, this.gameObject);
+                InitializeInformation(true, true);
+                syncErrCount = 0;
+                nameErrCount = 0;
+            }
+
+            //detect errors - names
+            if (sync_visitorNames == null || sync_visitorNames.Length == 0) nameErrCount++;
+            if(nameErrCount > restoreNameErrCount)
+            {
+                Networking.SetOwner(localPlayer, this.gameObject);
+                ResetNameByAttending(true);
+                nameErrCount = 0;
+            }
+
+            //late update
             if (late_update_counter > 0)
             {
                 if (late_update_counter == 1 && sync_valid) DisplayVisitor();
                 late_update_counter--;
             }
-
-            if (sync_createdTick == 0)
-            {
-                syncErrCount++;
-                if (syncErrCount > resetSyncErrCount)
-                {
-                    Networking.SetOwner(localPlayer, this.gameObject);
-                    InitializeInformation(true, true);
-                    syncErrCount = 0;
-                }
-            }
+            
         }
     }
 
@@ -229,15 +242,8 @@ public class VisitorsBoardManager : UdonSharpBehaviour
                 sync_timeStampPack[i] = 0;
             }
 
-            if (restore)
-            {
-                players = new VRCPlayerApi[WORLD_MAX_CAPACITY * 2];
-                VRCPlayerApi.GetPlayers(players);
-                foreach (VRCPlayerApi vp in players)
-                {
-                    AddNameAndJoinStamp(vp, out _, false);
-                }
-            }
+            if (restore) ResetNameByAttending(false);
+            
             RequestSerialization();
         }
         else
@@ -246,6 +252,18 @@ public class VisitorsBoardManager : UdonSharpBehaviour
             sync_visitorNames = new string[nameCountMAX];
             sync_timeStampPack = new int[nameCountMAX];
         }
+    }
+
+    private void ResetNameByAttending(bool req_serialize = true)
+    {
+        players = new VRCPlayerApi[WORLD_MAX_CAPACITY * 2];
+        VRCPlayerApi.GetPlayers(players);
+        foreach (VRCPlayerApi vp in players)
+        {
+            AddNameAndJoinStamp(vp, out _, false);
+        }
+
+        if (req_serialize) RequestSerialization();
     }
 
     private void SwitchStatToNext() => currentStatIndex = (currentStatIndex + 1) % statsViewMode.Length;

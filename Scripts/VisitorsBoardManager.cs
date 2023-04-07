@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Globalization;
 using UnityEngine;
 using UnityEngine.UI;
@@ -569,7 +569,6 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         return newLen;
     }
 
-    private int _;
     private string ToBase64(string st) => ToBase64(st, out _);
     private string ToBase64(string st, out int byteCount)
     {
@@ -608,5 +607,9 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     }
 
     #endregion
+    
+    //人人人人人人人_
+    private int _;//＜
+    //Y^Y^Y^Y^Y^Y^Y￣
 
 }

@@ -8,7 +8,7 @@ using VRC.SDKBase;
 [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
 public class VisitorsBoardManager : UdonSharpBehaviour
 {
-#region FIELDS
+    #region FIELDS
 
     //INSPECTOR
     [Header("訪問者の名前の色")]
@@ -86,7 +86,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     private const int STAT_OPTIONS = 96;
     private const string SYNC_WAIT_MESSAGE = "Waiting for sync...";
 
-#endregion
+    #endregion
 
     //UNITY EVENTS
     private void Start()
@@ -154,7 +154,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
             //detect errors - names
             if (sync_visitorNames == null || sync_visitorNames.Length == 0) nameErrCount++;
-            if(nameErrCount > restoreNameErrCount)
+            if (nameErrCount > restoreNameErrCount)
             {
                 Networking.SetOwner(localPlayer, this.gameObject);
                 ResetNameByAttending(true);
@@ -167,7 +167,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
                 if (late_update_counter == 1 && sync_valid) DisplayVisitor();
                 late_update_counter--;
             }
-            
+
         }
     }
 
@@ -243,7 +243,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
             }
 
             if (restore) ResetNameByAttending(false);
-            
+
             RequestSerialization();
         }
         else
@@ -272,9 +272,9 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     {
         index = -1;
         if (vp == null) return;
-        
+
         string name = vp.displayName;
-  
+
         for (int i = 0; i < sync_visitorNames.Length; i++)
         {
             if (string.IsNullOrEmpty(sync_visitorNames[i]))
@@ -303,12 +303,12 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         if (vp == null) return;
 
         string name = vp.displayName;
-  
+
         for (int i = 0; i < sync_visitorNames.Length; i++)
         {
             if (sync_visitorNames[i] == name)
             {
-                sync_timeStampPack[i] &= 0xFFFF0000;
+                sync_timeStampPack[i] = (sync_timeStampPack[i] >> 16) << 16;
                 sync_timeStampPack[i] |= DateTimeToHourMinInt(currentTimeShared.ToLocalTime());
                 index = i;
                 break;
@@ -429,7 +429,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         {
             st = VisitorNameString(valid, sync_visitorNames[index],
             HourMinIntToString(sync_timeStampPack[index] >> 16),
-            HourMinIntToString(sync_timeStampPack[index] & 0x0000FFFF);
+            HourMinIntToString(sync_timeStampPack[index] & 0x0000FFFF));
         }
         //else if (cur_stat == STAT_SHOW_POS)
         //{
@@ -607,7 +607,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     }
 
     #endregion
-    
+
     //人人人人人人人_
     private int _;//＜
     //Y^Y^Y^Y^Y^Y^Y￣

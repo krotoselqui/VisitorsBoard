@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEditor;
 using UdonSharp;
 using VRC.SDKBase;
 
@@ -15,9 +16,18 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     [SerializeField] private Color cl_inworld;
     private string colorCodeAttendingMember = "#FFFFFF";
 
+
+
     [Header("訪問者の名前の色 (退室後)")]
     [SerializeField] private Color cl_absent;
     private string colorCodeLeftMember = "#666666";
+
+
+    [Header("１列に入る人数")]
+    [SerializeField, Range(1, 100)] private int namePerObject = 20;
+
+    [Header("最終列溢れ人数")]
+    [SerializeField, Range(0, 1000)] private int lastRowAdditionalLine = 200;
 
     [Header("入退室時刻を表示への切り替えを有効にする")]
     [SerializeField] private bool enableEntryExitTimeView = false;
@@ -31,23 +41,31 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     [Header("最新の入室時間を入室時間として使う")]
     [SerializeField] private bool useNewestJoinTime = true;
 
-    [Header("１列に入る人数")]
-    [SerializeField, Range(1, 100)] private int namePerObject = 20;
-
-    [Header("最終列溢れ人数")]
-    [SerializeField, Range(0, 1000)] private int lastRowAdditionalLine = 200;
-
     [Header("Object Slots")]
     [SerializeField] private Text time_text = null;
     [SerializeField] private Text elapsed_text = null;
     [SerializeField] private Text visitorsnumber_text = null;
     [SerializeField] private Text[] name_text = null;
+    [SerializeField] private Text[] titles_text = null;
+    [SerializeField] private Text[] titles_text_sub = null;
 
     [Header("Date Format - Header")]
     [SerializeField] private string formatDate = "yyyy-MM-dd  HH:mm:ss";
 
     [Header("Time Format - Member")]
     [SerializeField] private string formatTime = "HH:mm";
+
+    [Header("実行時使用フォント（時刻/数字）")]
+    [SerializeField] private Font fontNumber = null;
+
+    [Header("実行時上書き使用フォント（名前）")]
+    [SerializeField] private Font fontVisitor = null;
+
+    [Header("実行時使用フォント（タイトル等）")]
+    [SerializeField] private Font fontTitles = null;
+
+    [Header("実行時使用フォント（サブタイトル英字）")]
+    [SerializeField] private Font fontTitlesSub = null;
 
     //SYNCED
     [UdonSynced] private long sync_createdTick = 0;
@@ -99,13 +117,22 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
         nameCountMAX = (name_text.Length * namePerObject > 0) ? name_text.Length * namePerObject + lastRowAdditionalLine : 1;
 
-        if (elapsed_text != null) smallFontSizeDay = GetFontSizeByScaling(elapsed_text, 0.4f);
-        if (visitorsnumber_text != null) smallFontSizeMemberCount = GetFontSizeByScaling(visitorsnumber_text, 0.6f);
-        if (name_text != null && name_text[0] != null) smallFontSizeItem = GetFontSizeByScaling(name_text[0], 0.5f);
-
         colorCodeAttendingMember = StrRGBofColor(cl_inworld);
         colorCodeLeftMember = StrRGBofColor(cl_absent);
 
+        if (elapsed_text != null)
+        {
+            smallFontSizeDay = GetFontSizeByScaling(elapsed_text, 0.4f);
+            if (fontNumber != null) elapsed_text.font = fontNumber;
+        }
+
+        if (visitorsnumber_text != null)
+        {
+            smallFontSizeMemberCount = GetFontSizeByScaling(visitorsnumber_text, 0.6f);
+            if (fontNumber != null) visitorsnumber_text.font = fontNumber;
+        }
+
+        if (name_text != null && name_text[0] != null) smallFontSizeItem = GetFontSizeByScaling(name_text[0], 0.5f);
         for (int i = 0; i < name_text.Length; i++)
         {
             if (name_text[i] == null) continue;
@@ -114,10 +141,25 @@ public class VisitorsBoardManager : UdonSharpBehaviour
                 name_text[i].alignment = TextAnchor.UpperCenter;
                 name_text[i].verticalOverflow = VerticalWrapMode.Overflow;
                 name_text[i].horizontalOverflow = HorizontalWrapMode.Overflow;
+                if (fontVisitor != null) name_text[i].font = fontVisitor;
             }
         }
 
-        if (time_text != null) time_text.text = SYNC_WAIT_MESSAGE;
+        if (time_text != null)
+        {
+            time_text.text = SYNC_WAIT_MESSAGE;
+            if (fontNumber != null) time_text.font = fontNumber;
+        }
+
+        if (titles_text != null && fontTitles != null)
+        {
+            foreach (Text tx in titles_text) tx.font = fontTitles;
+        }
+
+        if (titles_text_sub != null && fontTitlesSub != null)
+        {
+            foreach (Text tx in titles_text_sub) tx.font = fontTitlesSub;
+        }
 
         if (Networking.IsOwner(this.gameObject))
         {

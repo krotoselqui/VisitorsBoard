@@ -56,6 +56,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
 
     //INTERNAL
     private bool enableEntryExitTimeView = true;
+    private bool enableIDView = true;
     private bool dontShowElapsedTime = false;
     private int currentStatIndex = 0;
     private int[] statsViewMode = null;
@@ -88,6 +89,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
     private const int STAT_BASE64 = 94;
     private const int STAT_ACHIEVE = 95;
     private const int STAT_OPTIONS = 96;
+    private const int STAT_ID = 97;
     private const string SYNC_WAIT_MESSAGE = "Waiting for sync...";
 
     #endregion
@@ -257,6 +259,7 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         if (enableEntryExitTimeView) statcount++;
         //if (enablePositionView) statcount++;
         //if (enableBase64View) statcount++;
+        if (enableIDView) statcount++;
 
         statsViewMode = new int[statcount];
 
@@ -264,8 +267,9 @@ public class VisitorsBoardManager : UdonSharpBehaviour
         statsViewMode[1] = STAT_ALL_VIEW;
 
         if (enableEntryExitTimeView) statsViewMode[index++] = STAT_SHOW_TIME;
-        //if (enablePositionView) statsViewMode[index] = STAT_SHOW_POS;
+        //if (enablePositionView) statsViewMode[index++] = STAT_SHOW_POS;
         //if (enableBase64View) statsViewMode[index++] = STAT_BASE64;
+        if (enableIDView) statsViewMode[index++] = STAT_ID;
     }
 
     private void InitializeInformation(bool owner, bool restore = false)
@@ -483,6 +487,11 @@ public class VisitorsBoardManager : UdonSharpBehaviour
             int bc;
             string st_plainb64 = ToBase64(sync_visitorNames[index], out bc);
             st = VisitorNameString(valid, $"{bc:00} {st_plainb64} {sync_timeStampPack[index]}");
+        }
+        else if(cur_stat == STAT_ID)
+        {
+            //come to notice this is bad code.
+            st = "(undefined)";
         }
         else
         {
